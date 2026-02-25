@@ -140,6 +140,21 @@
     border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: var(--yellow);
   }
 
+  /* Status Tabs (Completed / Upcoming) */
+  .status-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .status-tab {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border2); border-radius: 8px;
+    padding: 8px 20px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--muted); transition: all .2s; user-select: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .status-tab:hover { border-color: var(--blue); color: var(--text); }
+  .status-tab.active { background: rgba(74,158,255,0.12); border-color: var(--blue); color: #fff; }
+  .status-tab .tab-badge {
+    background: var(--blue); color: #fff; font-size: 10px; padding: 1px 7px;
+    border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center;
+  }
+
   /* Match List */
   .section-header { font-size: 16px; margin-bottom: 14px; color: #fff; display: flex; align-items: center; gap: 8px; }
   .badge { background: var(--blue); color: #fff; font-size: 11px; padding: 2px 10px; border-radius: 12px; font-weight: 600; }
@@ -370,8 +385,16 @@
 <div class="page-wrapper hidden" id="page-predictions">
   <header>
     <div class="header-left" style="display:flex;align-items:center;gap:12px;">
-      <img src="assets/nhl.png" alt="NHL" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
-      <h1><b>NHL</b> Prediction Dashboard</h1>
+      <img id="pred-sport-logo" src="assets/nhl.png" alt="NHL" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+      <h1><b id="pred-sport-name">NHL</b> Prediction Dashboard</h1>
+      <div class="sport-tabs" id="pred-sport-tabs">
+        <div class="sport-tab active" data-pred-sport="nhl" onclick="switchPredSport('nhl')">
+          <img class="icon" src="assets/nhl.png" alt="NHL"> NHL
+        </div>
+        <div class="sport-tab" data-pred-sport="nba" onclick="switchPredSport('nba')">
+          <img class="icon" src="assets/nba.png" alt="NBA"> NBA
+        </div>
+      </div>
     </div>
     <div class="pred-stats-row" id="pred-header-stats">
       <div class="pred-stat-box"><div class="num" id="ps-games">-</div><div class="label">Games Analyzed</div></div>
@@ -382,7 +405,7 @@
   </header>
   <main>
     <div class="main-content">
-      <div id="pred-loading" class="pred-loading"><div class="spinner"></div><div id="pred-load-msg">Loading NHL data...</div></div>
+      <div id="pred-loading" class="pred-loading"><div class="spinner"></div><div id="pred-load-msg">Loading data...</div></div>
       <div id="pred-content" style="display:none">
         <h2>Upcoming Predictions <span class="badge" id="pred-count">0</span></h2>
         <div class="predictions-grid" id="pred-grid"></div>
@@ -575,6 +598,13 @@ function evHasMarkets(ev, cfg, grouped) {
   return (grouped[ev.slug] || []).length > 0;
 }
 
+let activeStatusTab = 'completed';
+
+function setStatusTab(tab) {
+  activeStatusTab = tab;
+  renderMatchList();
+}
+
 function renderMatchList() {
   const data = sportData[activeSport];
   if (!data) return;
@@ -587,40 +617,50 @@ function renderMatchList() {
 
   let html = '';
 
-  // Show upcoming — filter to 7 days by default
-  if (upcomingWithMkts.length > 0) {
-    const now = new Date();
-    const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const within7 = upcomingWithMkts.filter(ev => new Date(ev.start_time_utc) <= sevenDays);
-    const display = showAllUpcoming ? upcomingWithMkts : within7;
-    const hiddenCount = upcomingWithMkts.length - within7.length;
+  // Status tabs
+  html += `<div class="status-tabs">
+    <div class="status-tab ${activeStatusTab === 'completed' ? 'active' : ''}" onclick="setStatusTab('completed')">
+      Completed <span class="tab-badge">${completedWithMkts.length}</span>
+    </div>
+    <div class="status-tab ${activeStatusTab === 'upcoming' ? 'active' : ''}" onclick="setStatusTab('upcoming')">
+      Upcoming <span class="tab-badge">${upcomingWithMkts.length}</span>
+    </div>
+  </div>`;
 
-    html += `<div class="section-header">Upcoming &mdash; Next 7 Days <span class="badge">${display.length}</span></div>`;
-    html += '<div class="match-grid">';
-    for (const ev of display) {
-      const mkts = data.grouped[ev.slug] || [];
-      html += renderMatchCard(ev, mkts, false);
-    }
-    html += '</div>';
+  if (activeStatusTab === 'upcoming') {
+    if (upcomingWithMkts.length > 0) {
+      const now = new Date();
+      const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const within7 = upcomingWithMkts.filter(ev => new Date(ev.start_time_utc) <= sevenDays);
+      const display = showAllUpcoming ? upcomingWithMkts : within7;
+      const hiddenCount = upcomingWithMkts.length - within7.length;
 
-    if (!showAllUpcoming && hiddenCount > 0) {
-      html += `<button class="show-more-btn" onclick="showAllUpcoming=true;renderMatchList()">Show ${hiddenCount} more upcoming event${hiddenCount > 1 ? 's' : ''}</button>`;
-    } else if (showAllUpcoming && hiddenCount > 0) {
-      html += `<button class="show-more-btn" onclick="showAllUpcoming=false;renderMatchList()">Show less</button>`;
+      html += '<div class="match-grid">';
+      for (const ev of display) {
+        const mkts = data.grouped[ev.slug] || [];
+        html += renderMatchCard(ev, mkts, false);
+      }
+      html += '</div>';
+
+      if (!showAllUpcoming && hiddenCount > 0) {
+        html += `<button class="show-more-btn" onclick="showAllUpcoming=true;renderMatchList()">Show ${hiddenCount} more upcoming event${hiddenCount > 1 ? 's' : ''}</button>`;
+      } else if (showAllUpcoming && hiddenCount > 0) {
+        html += `<button class="show-more-btn" onclick="showAllUpcoming=false;renderMatchList()">Show less</button>`;
+      }
+    } else {
+      html += `<div class="notice">No upcoming ${cfg.label} events with markets.</div>`;
     }
   } else {
-    html += `<div class="notice">No upcoming ${cfg.label} events with markets. Showing recent completed games.</div>`;
-  }
-
-  // Show completed (recent)
-  if (completedWithMkts.length > 0) {
-    html += `<div class="section-header">Completed <span class="badge">${completedWithMkts.length}</span></div>`;
-    html += '<div class="match-grid">';
-    for (const ev of completedWithMkts) {
-      const mkts = data.grouped[ev.slug] || [];
-      html += renderMatchCard(ev, mkts, true);
+    if (completedWithMkts.length > 0) {
+      html += '<div class="match-grid">';
+      for (const ev of completedWithMkts) {
+        const mkts = data.grouped[ev.slug] || [];
+        html += renderMatchCard(ev, mkts, true);
+      }
+      html += '</div>';
+    } else {
+      html += `<div class="notice">No completed ${cfg.label} events with markets.</div>`;
     }
-    html += '</div>';
   }
 
   listEl.innerHTML = html;
@@ -1186,11 +1226,12 @@ function parseRoute() {
   const hash = location.hash.replace(/^#\/?/, '');
   const parts = hash.split('/');
   if (parts[0] === 'predictions') {
-    return { page: 'predictions', sport: null, slug: null };
+    const predSport = (parts[1] === 'nba' || parts[1] === 'nhl') ? parts[1] : null;
+    return { page: 'predictions', sport: null, slug: null, predSport };
   }
   const sport = SPORTS[parts[0]] ? parts[0] : null;
   const slug = parts.slice(1).join('/') || null;
-  return { page: 'odds-match', sport, slug };
+  return { page: 'odds-match', sport, slug, predSport: null };
 }
 
 function showPage(page) {
@@ -1208,11 +1249,12 @@ async function handleRoute() {
   if (_routing) return;
   _routing = true;
   try {
-    const { page, sport, slug } = parseRoute();
+    const { page, sport, slug, predSport } = parseRoute();
 
     if (page === 'predictions') {
       showPage('predictions');
-      loadPredictions();
+      const ps = predSport || activePredSport;
+      loadPredictions(ps);
       return;
     }
 
@@ -1310,7 +1352,28 @@ async function init() {
 }
 
 // ---- Predictions Page ----
-let predLoaded = false;
+let predLoadedSport = null;  // which sport is currently rendered
+let activePredSport = 'nhl';
+
+const PRED_SPORTS = {
+  nhl: { label: 'NHL', icon: 'assets/nhl.png', eventsTable: 'nhl_events', marketsTable: 'nhl_markets', teamsTable: 'nhl_teams', storageKey: 'nhl_pred_tracker', scoreLabel: 'GPG' },
+  nba: { label: 'NBA', icon: 'assets/nba.png', eventsTable: 'nba_events', marketsTable: 'nba_markets', teamsTable: 'nba_teams', storageKey: 'nba_pred_tracker', scoreLabel: 'PPG' },
+};
+
+function switchPredSport(sport) {
+  if (sport === activePredSport && predLoadedSport === sport) return;
+  location.hash = '#/predictions/' + sport;
+}
+
+function renderPredSportTabs() {
+  document.querySelectorAll('#pred-sport-tabs .sport-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.predSport === activePredSport);
+  });
+  const cfg = PRED_SPORTS[activePredSport];
+  document.getElementById('pred-sport-logo').src = cfg.icon;
+  document.getElementById('pred-sport-logo').alt = cfg.label;
+  document.getElementById('pred-sport-name').textContent = cfg.label;
+}
 
 // Prediction-specific helpers
 function parseTitle(t) {
@@ -1357,21 +1420,33 @@ function toggleCard(id, btn) {
 
 const predMsg = t => { const e = document.getElementById('pred-load-msg'); if (e) e.textContent = t; };
 
-async function loadPredictions() {
-  if (predLoaded) return;
+async function loadPredictions(sport) {
+  sport = sport || 'nhl';
+  activePredSport = sport;
+  renderPredSportTabs();
+
+  if (predLoadedSport === sport) return;
+
+  // Reset UI for loading
+  document.getElementById('pred-loading').style.display = '';
+  document.getElementById('pred-content').style.display = 'none';
+  ['ps-games','ps-preds','ps-mkts','ps-favwr'].forEach(id => document.getElementById(id).textContent = '-');
+
+  const cfg = PRED_SPORTS[sport];
+  const isNBA = sport === 'nba';
 
   try {
-    predMsg('Loading events...');
-    const [completed, upcoming, nhlTeams] = await Promise.all([
-      q('nhl_events', 'select=slug,title,start_time_utc,score&score=not.is.null&order=start_time_utc.desc&limit=1000'),
-      q('nhl_events', 'select=slug,title,start_time_utc,score&score=is.null&order=start_time_utc.asc&limit=200'),
-      q('nhl_teams', 'select=polymarket,abbr'),
+    predMsg(`Loading ${cfg.label} events...`);
+    const [completed, upcoming, sportTeams] = await Promise.all([
+      q(cfg.eventsTable, 'select=slug,title,start_time_utc,score&score=not.is.null&order=start_time_utc.desc&limit=1000'),
+      q(cfg.eventsTable, 'select=slug,title,start_time_utc,score&score=is.null&order=start_time_utc.asc&limit=200'),
+      q(cfg.teamsTable, 'select=polymarket,abbr'),
     ]);
     const teamAbbr = {};
-    for (const t of nhlTeams) { teamAbbr[t.polymarket] = t.abbr.toUpperCase(); }
+    for (const t of sportTeams) { teamAbbr[t.polymarket] = t.abbr.toUpperCase(); }
 
-    predMsg('Loading all markets...');
-    const allMkts = await qAll('nhl_markets',
+    predMsg(`Loading ${cfg.label} markets...`);
+    const allMkts = await qAll(cfg.marketsTable,
       'select=event_slug,sports_market_type,question,outcome_1_name,outcome_1_pinn_odds,outcome_1_current_odds,outcome_2_name,outcome_2_pinn_odds,outcome_2_current_odds,winning_outcome'
     );
 
@@ -1531,6 +1606,8 @@ async function loadPredictions() {
       let totalsBoxes = '';
       if (p.totals.length > 0) {
         for (const t of p.totals) {
+          // For NBA, only show totals when odds are close (both ~1.90, i.e. between 1.70 and 2.10)
+          if (isNBA && t.o1 && t.o2 && (t.o1 < 1.70 || t.o1 > 2.10 || t.o2 < 1.70 || t.o2 > 2.10)) continue;
           let inner = `<div class="odds-row"><span class="odds-team">Over</span><span class="odds-val ${t.predictOver ? 'odds-pick' : ''}">${t.o1 ? predFmtOdds(t.o1) : '-'}</span></div>`;
           inner += `<div class="odds-row"><span class="odds-team">Under</span><span class="odds-val ${!t.predictOver ? 'odds-pick' : ''}">${t.o2 ? predFmtOdds(t.o2) : '-'}</span></div>`;
           totalsBoxes += `<div class="odds-box"><div class="odds-title">Total ${t.line}</div>${inner}</div>`;
@@ -1553,12 +1630,17 @@ async function loadPredictions() {
       const f = v => v != null ? v.toFixed(1) : '-';
       const fp = v => v != null ? pct(v) + '%' : '-';
       const cardId = 'card-' + i;
-      html += `<div class="pred-card"><div class="card-header"><div class="datetime">${predFmtDate(p.date)}</div><div class="conf-badge" style="background:${confBg(p.conf)}">${p.conf}%</div></div><div class="matchup"><div class="team ${isT1 ? 'winner' : ''}"><div class="name">${p.t1}</div><div class="record">${p.gp1}GP · ${(tw[p.t1]||0)}W-${(p.gp1-(tw[p.t1]||0))}L · ${pct(p.wr1)}%</div></div><div class="vs">VS</div><div class="team ${!isT1 ? 'winner' : ''}"><div class="name">${p.t2}</div><div class="record">${p.gp2}GP · ${(tw[p.t2]||0)}W-${(p.gp2-(tw[p.t2]||0))}L · ${pct(p.wr2)}%</div></div></div><div class="odds-grid"><div class="odds-box"><div class="odds-title">Moneyline</div>${mlHtml}</div>${p.spDisp ? (()=>{ const spAbbrName = p.spFavTeam && teamAbbr[p.spFavTeam] ? teamAbbr[p.spFavTeam] : (p.spFavTeam || ''); const spTitle = p.spLine ? `Spread (${spAbbrName} ${p.spLine})` : 'Spread'; const sp1HasWinner = p.spDisp && p.spDisp.includes(p.winner); const sp2HasWinner = p.spDisp2 && p.spDisp2.includes(p.winner); return `<div class="odds-box"><div class="odds-title">${spTitle}</div><div class="odds-row"><span class="odds-team">${p.spDisp}</span><span class="odds-val ${sp1HasWinner ? 'odds-pick' : ''}">${predFmtOdds(p.spO1)}</span></div><div class="odds-row"><span class="odds-team">${p.spDisp2 || ''}</span><span class="odds-val ${sp2HasWinner ? 'odds-pick' : ''}">${predFmtOdds(p.spO2)}</span></div></div>`; })() : ''}${totalsBoxes}</div><div class="conf-section"><div class="conf-header">${isT1 ? `<span class="predicted">${p.winner}</span><span class="pct">${p.conf}%</span>` : `<span class="pct">${p.conf}%</span><span class="predicted">${p.winner}</span>`}</div><div class="conf-bar-bg"><div class="conf-bar" style="width:${p.conf}%;background:${confGrad(p.conf)};${isT1 ? '' : 'margin-left:auto'}"></div></div></div><button class="expand-btn" onclick="toggleCard('${cardId}', this)">Show Analysis</button><div class="card-details" id="${cardId}"><div class="signals">${sigBar('ML Odds', p.mlC1, p.mlC2, p.hasML ? predFmtOdds(p.mlO1)+' / '+predFmtOdds(p.mlO2) : 'No odds')}${sigBar('Win Rate', p.wrC1, p.wrC2, pct(p.wr1)+'% / '+pct(p.wr2)+'%')}${sigBar('Form L10', p.fmC1, p.fmC2, fp(p.l10_1)+' / '+fp(p.l10_2))}${sigBar('Spread', p.spC1, p.spC2, 'ATS '+pct(p.ats1)+'% / '+pct(p.ats2)+'%')}${sigBar('Scoring', p.scC1, p.scC2, f(p.g1)+' / '+f(p.g2)+' GPG')}${sigBar('H2H', p.h2hC1, p.h2hC2, p.h2hGames.length+' games')}</div><div class="deep-dive"><div class="dd-section"><div class="dd-title">Scoring Profile</div><div class="dd-row"><div class="dd-stat"><span>${p.t1} GF/G:</span> <strong>${f(p.g1)}</strong></div><div class="dd-stat"><span>${p.t1} GA/G:</span> <strong>${f(p.ga1)}</strong></div><div class="dd-stat"><span>${p.t2} GF/G:</span> <strong>${f(p.g2)}</strong></div><div class="dd-stat"><span>${p.t2} GA/G:</span> <strong>${f(p.ga2)}</strong></div><div class="dd-stat"><span>L10 GPG:</span> <strong>${f(p.l10g1)} / ${f(p.l10g2)}</strong></div></div></div><div class="dd-section"><div class="dd-title">Head-to-Head (${p.h2hGames.length})</div>${h2hHtml}</div><div class="dd-section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><div class="dd-title">${p.t1} Last 5</div>${formRow(p.recentT1, p.t1)}</div><div><div class="dd-title">${p.t2} Last 5</div>${formRow(p.recentT2, p.t2)}</div></div></div></div></div>`;
+      // For NBA, only show spread box when odds are close (~1.90 each side)
+      const showSpread = p.spDisp && (!isNBA || (p.spO1 && p.spO2 && p.spO1 >= 1.70 && p.spO1 <= 2.10 && p.spO2 >= 1.70 && p.spO2 <= 2.10));
+      const scoreLabel = isNBA ? 'PPG' : 'GPG';
+      const sfLabel = isNBA ? 'PF/G' : 'GF/G';
+      const saLabel = isNBA ? 'PA/G' : 'GA/G';
+      html += `<div class="pred-card"><div class="card-header"><div class="datetime">${predFmtDate(p.date)}</div><div class="conf-badge" style="background:${confBg(p.conf)}">${p.conf}%</div></div><div class="matchup"><div class="team ${isT1 ? 'winner' : ''}"><div class="name">${p.t1}</div><div class="record">${p.gp1}GP · ${(tw[p.t1]||0)}W-${(p.gp1-(tw[p.t1]||0))}L · ${pct(p.wr1)}%</div></div><div class="vs">VS</div><div class="team ${!isT1 ? 'winner' : ''}"><div class="name">${p.t2}</div><div class="record">${p.gp2}GP · ${(tw[p.t2]||0)}W-${(p.gp2-(tw[p.t2]||0))}L · ${pct(p.wr2)}%</div></div></div><div class="odds-grid"><div class="odds-box"><div class="odds-title">Moneyline</div>${mlHtml}</div>${showSpread ? (()=>{ const spAbbrName = p.spFavTeam && teamAbbr[p.spFavTeam] ? teamAbbr[p.spFavTeam] : (p.spFavTeam || ''); const spTitle = p.spLine ? `Spread (${spAbbrName} ${p.spLine})` : 'Spread'; const sp1HasWinner = p.spDisp && p.spDisp.includes(p.winner); const sp2HasWinner = p.spDisp2 && p.spDisp2.includes(p.winner); return `<div class="odds-box"><div class="odds-title">${spTitle}</div><div class="odds-row"><span class="odds-team">${p.spDisp}</span><span class="odds-val ${sp1HasWinner ? 'odds-pick' : ''}">${predFmtOdds(p.spO1)}</span></div><div class="odds-row"><span class="odds-team">${p.spDisp2 || ''}</span><span class="odds-val ${sp2HasWinner ? 'odds-pick' : ''}">${predFmtOdds(p.spO2)}</span></div></div>`; })() : ''}${totalsBoxes}</div><div class="conf-section"><div class="conf-header">${isT1 ? `<span class="predicted">${p.winner}</span><span class="pct">${p.conf}%</span>` : `<span class="pct">${p.conf}%</span><span class="predicted">${p.winner}</span>`}</div><div class="conf-bar-bg"><div class="conf-bar" style="width:${p.conf}%;background:${confGrad(p.conf)};${isT1 ? '' : 'margin-left:auto'}"></div></div></div><button class="expand-btn" onclick="toggleCard('${cardId}', this)">Show Analysis</button><div class="card-details" id="${cardId}"><div class="signals">${sigBar('ML Odds', p.mlC1, p.mlC2, p.hasML ? predFmtOdds(p.mlO1)+' / '+predFmtOdds(p.mlO2) : 'No odds')}${sigBar('Win Rate', p.wrC1, p.wrC2, pct(p.wr1)+'% / '+pct(p.wr2)+'%')}${sigBar('Form L10', p.fmC1, p.fmC2, fp(p.l10_1)+' / '+fp(p.l10_2))}${sigBar('Spread', p.spC1, p.spC2, 'ATS '+pct(p.ats1)+'% / '+pct(p.ats2)+'%')}${sigBar('Scoring', p.scC1, p.scC2, f(p.g1)+' / '+f(p.g2)+' '+scoreLabel)}${sigBar('H2H', p.h2hC1, p.h2hC2, p.h2hGames.length+' games')}</div><div class="deep-dive"><div class="dd-section"><div class="dd-title">Scoring Profile</div><div class="dd-row"><div class="dd-stat"><span>${p.t1} ${sfLabel}:</span> <strong>${f(p.g1)}</strong></div><div class="dd-stat"><span>${p.t1} ${saLabel}:</span> <strong>${f(p.ga1)}</strong></div><div class="dd-stat"><span>${p.t2} ${sfLabel}:</span> <strong>${f(p.g2)}</strong></div><div class="dd-stat"><span>${p.t2} ${saLabel}:</span> <strong>${f(p.ga2)}</strong></div><div class="dd-stat"><span>L10 ${scoreLabel}:</span> <strong>${f(p.l10g1)} / ${f(p.l10g2)}</strong></div></div></div><div class="dd-section"><div class="dd-title">Head-to-Head (${p.h2hGames.length})</div>${h2hHtml}</div><div class="dd-section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><div class="dd-title">${p.t1} Last 5</div>${formRow(p.recentT1, p.t1)}</div><div><div class="dd-title">${p.t2} Last 5</div>${formRow(p.recentT2, p.t2)}</div></div></div></div></div>`;
     }
     grid.innerHTML = html;
 
     // Prediction Tracker
-    const STORAGE_KEY = 'nhl_pred_tracker';
+    const STORAGE_KEY = cfg.storageKey;
     let tracker = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     for (const key of Object.keys(tracker)) {
       const t = tracker[key];
@@ -1653,7 +1735,7 @@ async function loadPredictions() {
       rhtml += `<tr><td>${predFmtDate(ev.start_time_utc)}</td><td>${ev.title}</td><td class="score-cell">${ev.score}</td><td>${favName}</td><td>${mlOddsStr}</td><td>${spCell}</td><td>${spOddsStr}</td><td>${totCell}</td><td>${totOddsStr}</td><td class="${resClass}">${resText}</td></tr>`;
     }
     tbody.innerHTML = rhtml;
-    predLoaded = true;
+    predLoadedSport = sport;
 
   } catch (err) {
     document.getElementById('pred-loading').innerHTML = `<div style="color:var(--red)">Error: ${err.message}</div>`;
@@ -1664,7 +1746,7 @@ async function loadPredictions() {
 // ---- Page Navigation (Left Nav) ----
 function switchPage(page) {
   if (page === 'predictions') {
-    location.hash = '#/predictions';
+    location.hash = '#/predictions/' + activePredSport;
   } else {
     // Go back to odds match — use current sport or default
     navigate(activeSport || Object.keys(SPORTS)[0], null);
