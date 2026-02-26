@@ -174,6 +174,7 @@
   .match-card .mc-meta { display: flex; gap: 8px; font-size: 10px; color: var(--muted); }
   .mc-meta .mc-score { color: var(--green); font-weight: 600; }
   .mc-meta .mc-mkts { color: var(--dim); }
+  .mc-no-odds { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--yellow); margin-top: 2px; }
 
   /* Market Detail View */
   .detail-view { display: none; }
@@ -594,8 +595,16 @@ function renderTabs() {
 // ---- Render Match List ----
 let showAllUpcoming = false;
 
+function marketHasTrades(m) {
+  return ((m.oc1_trades ?? 0) + (m.oc2_trades ?? 0)) >= 1;
+}
+
+function getMarketsWithTrades(grouped, slug) {
+  return (grouped[slug] || []).filter(marketHasTrades);
+}
+
 function evHasMarkets(ev, cfg, grouped) {
-  return (grouped[ev.slug] || []).length > 0;
+  return getMarketsWithTrades(grouped, ev.slug).length > 0;
 }
 
 let activeStatusTab = 'completed';
@@ -637,7 +646,7 @@ function renderMatchList() {
 
       html += '<div class="match-grid">';
       for (const ev of display) {
-        const mkts = data.grouped[ev.slug] || [];
+        const mkts = getMarketsWithTrades(data.grouped, ev.slug);
         html += renderMatchCard(ev, mkts, false);
       }
       html += '</div>';
@@ -654,7 +663,7 @@ function renderMatchList() {
     if (completedWithMkts.length > 0) {
       html += '<div class="match-grid">';
       for (const ev of completedWithMkts) {
-        const mkts = data.grouped[ev.slug] || [];
+        const mkts = getMarketsWithTrades(data.grouped, ev.slug);
         html += renderMatchCard(ev, mkts, true);
       }
       html += '</div>';
@@ -668,6 +677,13 @@ function renderMatchList() {
   renderErrorLog();
 }
 
+function marketHasOdds(m, cfg) {
+  for (const book of cfg.books) {
+    if (m[book.col1] != null || m[book.col2] != null) return true;
+  }
+  return false;
+}
+
 function renderMatchCard(ev, mkts, isCompleted) {
   const cfg = SPORTS[activeSport];
   const isFinal = !!ev.score;
@@ -676,6 +692,7 @@ function renderMatchCard(ev, mkts, isCompleted) {
   const mktCount = mkts.length;
   const typeSet = new Set(mkts.map(m => m.sports_market_type));
   const typeList = [...typeSet].join(', ');
+  const noOdds = isFinal && mkts.length > 0 && !mkts.some(m => marketHasOdds(m, cfg));
 
   return `<div class="match-card" onclick="openDetail('${ev.slug}')">
     <div class="mc-header">
@@ -687,6 +704,7 @@ function renderMatchCard(ev, mkts, isCompleted) {
       ${isFinal ? `<span class="mc-score">${ev.score}</span>` : ''}
       <span class="mc-mkts">${mktCount} markets${typeList ? ' \u00b7 ' + typeList : ''}</span>
     </div>
+    ${noOdds ? '<div class="mc-no-odds">&#9888; No odds</div>' : ''}
   </div>`;
 }
 
@@ -702,7 +720,7 @@ function openDetailDirect(slug) {
   const ev = data.events.find(e => e.slug === slug);
   if (!ev) return;
 
-  const mkts = data.grouped[slug] || [];
+  const mkts = getMarketsWithTrades(data.grouped, slug);
   const detailEl = document.getElementById('detail-view');
   document.getElementById('match-list-view').style.display = 'none';
   detailEl.classList.add('active');
@@ -1006,7 +1024,7 @@ function getOddsRange(m, cfg, outcomeNum) {
 }
 
 function findDiscrepancies(slug, cfg, grouped) {
-  const mkts = grouped[slug] || [];
+  const mkts = getMarketsWithTrades(grouped, slug);
   const discs = [];
   for (const m of mkts) {
     for (const oc of [1, 2]) {
