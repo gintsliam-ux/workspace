@@ -529,7 +529,9 @@ async function q(table, params = '', range = null) {
   if (range) headers.Range = range;
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers });
   if (!r.ok) throw new Error(`API ${r.status}: ${table}`);
-  return r.json();
+  const text = await r.text();
+  if (!text) return [];
+  return JSON.parse(text);
 }
 
 async function qAll(table, params = '') {
@@ -1427,8 +1429,8 @@ function confBg(p) {
   if (p >= 55) return 'rgba(251,191,36,0.2)';
   return 'rgba(156,163,175,0.15)';
 }
-function bestOdds1(m) { return m.outcome_1_current_odds || m.outcome_1_pinn_odds; }
-function bestOdds2(m) { return m.outcome_2_current_odds || m.outcome_2_pinn_odds; }
+function bestOdds1(m) { return m.outcome_1_current_odds; }
+function bestOdds2(m) { return m.outcome_2_current_odds; }
 
 function toggleCard(id, btn) {
   const el = document.getElementById(id);
@@ -1465,7 +1467,7 @@ async function loadPredictions(sport) {
 
     predMsg(`Loading ${cfg.label} markets...`);
     const allMkts = await qAll(cfg.marketsTable,
-      'select=event_slug,sports_market_type,question,outcome_1_name,outcome_1_pinn_odds,outcome_1_current_odds,outcome_2_name,outcome_2_pinn_odds,outcome_2_current_odds,winning_outcome'
+      'select=event_slug,sports_market_type,question,outcome_1_name,outcome_1_current_odds,outcome_2_name,outcome_2_current_odds,winning_outcome'
     );
 
     predMsg('Crunching numbers...');
